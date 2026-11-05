@@ -1,0 +1,15 @@
+* text=auto
+*.c text eol=lf
+*.h text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.cmd text eol=crlf
+*.ttf binary
+*.jpg binary
+*.png binary
+
+# Exact approved payload, vendored upstream originals, and legal notices.
+payload.txt -text
+upstream/** -text
+licences/** -text
+COPYING -text

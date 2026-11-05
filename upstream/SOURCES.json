@@ -1,0 +1,117 @@
+{
+  "description": "Local upstream source inventory. Commit references are documented in docs/recurciv-payload.md; hashes verify the included files, not remote provenance.",
+  "known_origins": {
+    "CivSwitch": {
+      "url": "https://github.com/Gezine/CivSwitch",
+      "commit": "3238a3e3340fd19a9dbd5cde56f3b50f9bc5d97f"
+    },
+    "Netflix-N-Hack": {
+      "commit": "605eb93ba5fa589f4f1274973e191e6c7fff1b9d"
+    },
+    "Netflix-N-Hack-ufm42": {
+      "commit": "1208a6ba6ca7131ec1843022093eefe5a8c51d2c"
+    }
+  },
+  "files": [
+    {
+      "path": "upstream/CivSwitch/core.js",
+      "sha256": "1fe1aaa68dc8c0534d79d65b1dd545f66c6b3fb3d547f01c967cdc5f70e7bdf4",
+      "bytes": 60695
+    },
+    {
+      "path": "upstream/CivSwitch/LICENSE",
+      "sha256": "c0675240c74693e44d256a070ddf59f3d99ce7a87c82f8dfa0dbda53f3647053",
+      "bytes": 1063
+    },
+    {
+      "path": "upstream/CivSwitch/PicoSwitch/compress.js",
+      "sha256": "21a22ec0ad8857b1a68a651e29ec996ff03f2a4030fe134169d506715145b524",
+      "bytes": 8213
+    },
+    {
+      "path": "upstream/CivSwitch/PicoSwitch/package.json",
+      "sha256": "21367741817e6f85e0cd3d2ba578ec01e765d2af61812c5b12497ae061d00879",
+      "bytes": 52
+    },
+    {
+      "path": "upstream/CivSwitch/README.md",
+      "sha256": "951ccc29fd87c62999cb543e77e76e4d015073f59e424e0d4bb6048c5938dabc",
+      "bytes": 3467
+    },
+    {
+      "path": "upstream/Netflix-N-Hack/inject.js",
+      "sha256": "dba52a1b94c496c692c7df6d1152df587d445cd39f4261e01a8e542cb662121b",
+      "bytes": 64055
+    },
+    {
+      "path": "upstream/Netflix-N-Hack/LICENSE",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "bytes": 35149
+    },
+    {
+      "path": "upstream/Netflix-N-Hack/README.md",
+      "sha256": "642b7dac79568e989c2e8e863eb1f4657c22dbbba9ff38d789f087694baead1e",
+      "bytes": 16333
+    },
+    {
+      "path": "upstream/Netflix-N-Hack-ufm42/inject.js",
+      "sha256": "9dd3990b66b9ebf576f351cc4b3a31eba0d350a667d057b222505f5f40747ea8",
+      "bytes": 23344
+    },
+    {
+      "path": "upstream/Netflix-N-Hack-ufm42/LICENSE",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "bytes": 35149
+    },
+    {
+      "path": "upstream/Netflix-N-Hack-ufm42/README.md",
+      "sha256": "a0d17975200f67a732f387ddab3d16f17b009680b1d4ba4219065be0f8f78b12",
+      "bytes": 2463
+    },
+    {
+      "path": "upstream/runtime/gcc/libgcc/config/aarch64/sfp-exceptions.c",
+      "sha256": "c7d037dd188b11a4c6e0432c7479a08896a2d3cba8ba2b6c22f0e49a6a45dde4",
+      "bytes": 2275
+    },
+    {
+      "path": "upstream/runtime/gcc/libgcc/config/aarch64/sfp-machine.h",
+      "sha256": "762189aac78adb73c3b509bf21e940c7eede05494bb4008625461d07de478ace",
+      "bytes": 4052
+    },
+    {
+      "path": "upstream/runtime/gcc/libgcc/soft-fp/extenddftf2.c",
+      "sha256": "3319c63778099151d94760052bf9b5afa2cbab762a0ec394331661094653f95f",
+      "bytes": 1783
+    },
+    {
+      "path": "upstream/runtime/gcc/libgcc/soft-fp/soft-fp.h",
+      "sha256": "e8183cf960a0771a80d5e33e58ea6d64150ed213d3e107b3cdbc88f5f921cd08",
+      "bytes": 9840
+    },
+    {
+      "path": "upstream/runtime/gcc/libgcc/soft-fp/trunctfdf2.c",
+      "sha256": "72ec9b9f464a5f30d2ee1fcec8eb04e2ee7577289b49d5d5d2b6da5b688128bd",
+      "bytes": 1761
+    },
+    {
+      "path": "upstream/runtime/gcc-16.1.0-1.patch",
+      "sha256": "7b39aeadf373327bf6671e1bc3596c864eeb38a92a0e3dd553ddd7f385869981",
+      "bytes": 41737
+    },
+    {
+      "path": "upstream/runtime/libnx-4.12.0.tar.gz",
+      "sha256": "1cf161a2a717d48a546dbadd349473efde6c0d5cf29abdec4e730dd542656be8",
+      "bytes": 712352
+    },
+    {
+      "path": "upstream/runtime/newlib-4.6.0.20260123-4.patch",
+      "sha256": "6d5aba4356553c727765c98e7553d3784f31d361c856e220ef27cc26353fb88f",
+      "bytes": 538721
+    },
+    {
+      "path": "upstream/runtime/newlib-4.6.0.20260123.tar.gz",
+      "sha256": "6ff27e3bf022666f43f7802255be680eeff722ac181b1725d21e2e8318604ee3",
+      "bytes": 9208322
+    }
+  ]
+}
