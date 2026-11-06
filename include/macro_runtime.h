@@ -21,7 +21,9 @@ typedef struct {
     MacroPlayState state,outcome;
     size_t step;
     uint32_t repeat,repeat_count,duration_ms;
-    uint64_t started,completed_at,elapsed_ms;
+    /* submitted_at anchors the full scaled logical hold. completed_at is the
+       observed completion time, not the timer origin or proof of game input. */
+    uint64_t started,submitted_at,completed_at,elapsed_ms;
     bool owned,neutral_confirmed,loop_gap,stop_queued;
 } MacroPlayer;
 bool macro_play_start(MacroPlayer *player,const MacroDocument *document,uint64_t now);

@@ -2,6 +2,8 @@
 
 **USB Controller, Keyboard, Macro Studio & Civilization VII Automation**
 
+**Current release: [v1.1.0](https://github.com/OR3OTHUG/RecurCIV/releases/tag/v1.1.0)**
+
 RecurCIV is a Nintendo Switch homebrew application combining USB controller input, keyboard functionality, controller macro creation and playback, and automated Civilization VII exploit delivery.
 
 Built on [Plume USB](https://github.com/MichelSama/plume-usb), with Civilization VII automation based on [CivSwitch](https://github.com/Gezine/CivSwitch).
@@ -32,6 +34,8 @@ For game control, ensure the receiving console recognizes RecurCIV as the intend
 Create and edit controller macros directly on your Switch.
 
 - Record controller inputs locally.
+- Choose **Live Record** to capture physical controller inputs while forwarding
+  them through the existing USB controller passthrough.
 - Create actions with simultaneous buttons, D-pad directions, and analog stick positions.
 - Adjust hold durations and insert delays.
 - Reorder and remove actions.
@@ -40,9 +44,33 @@ Create and edit controller macros directly on your Switch.
 - Play once or repeat a macro a specified number of times.
 - Stop playback and release controller inputs safely.
 
-**Recording behavior in v1.0.0:** Inputs are recorded locally and are not forwarded to the connected USB host while recording. You can review and save the recorded sequence, then play it back on the connected device.
+**New in v1.1.0:** Macro Studio has separate **Local Record**
+and **Live Record** options. Enter Live Record to acquire passthrough immediately;
+neutral synchronization and release of entry controls precede forwarding.
+Physical **Capture** short presses (or touchscreen Start/Stop) toggle recording
+without stopping passthrough. Unsaved captures require explicit replacement
+confirmation. Touch **Exit live**, wait for neutral cleanup, then Review/Edit/Save.
+Capture is never forwarded or recorded. Disconnects and cleanup failures retain
+captured data; touchscreen Retry cleanup retries neutral output without resuming
+recording or playback.
 
-Recording requires touchscreen access to stop. Recording is limited to 1,024 states or ten minutes, whichever comes first.
+Playback now times each full scaled hold from successful state submission,
+while still waiting for completion before advancing. This eliminates cumulative
+USB completion latency in the tested fixed-latency scenarios without skipping
+states or compressing catch-up holds. For sixty 100 ms states with simulated
+5 ms USB transfers, active playback improved from **6,600 ms to 6,000 ms**.
+See [timing measurements and limitations](docs/macro-timing.md).
+
+Captured timestamps reflect sampled physical input, not USB completion.
+Not every sampled transition is guaranteed to reach the host; playback timing
+can differ. See [Macro Studio](docs/macro-studio.md) for the workflow and limits.
+
+Local recording requires touchscreen Stop. Live Capture controls require supported
+applet notifications (Horizon 3.0.0+); failures show touchscreen fallback. Short-press
+screenshots are reserved during live sessions and restored on exit. Physical
+delivery, long-hold behavior and screenshot restoration need hardware verification.
+Touchscreen access is still required for session exit/recovery and replacement
+confirmation. Recording is limited to 1,024 states or ten minutes.
 
 ### Macro Library
 
@@ -82,7 +110,7 @@ Successful exploit execution does not automatically complete any subsequent netw
 
 ## Installation
 
-1. Download `RecurCIV-v1.0.0.zip` from the published release, when available.
+1. Download `RecurCIV-v1.1.0.zip` from the [v1.1.0 release](https://github.com/OR3OTHUG/RecurCIV/releases/tag/v1.1.0).
 2. Extract it to the root of your Switch SD card.
 3. Confirm the application is located at:
 
@@ -95,11 +123,12 @@ sdmc:/switch/RecurCIV/RecurCIV.nro
 Full application mode is recommended.
 
 Keep the accompanying license notices in `switch/RecurCIV/`. They are part
-of the distribution and do not change application operation. If downloading
-the standalone NRO instead, also obtain the matching
-`RecurCIV-v1.0.0-notices.zip`. Complete corresponding source is supplied as
-`RecurCIV-v1.0.0-source.zip` beside the binaries. These are release packaging
-instructions, not a claim that the release has already been published.
+of the distribution and do not change application operation. The install ZIP
+includes the NRO and its notices; a separate notices download is not required.
+Complete corresponding source, assets, build/test tools, payload sources and
+runtime source snapshots are supplied in `RecurCIV-v1.1.0-source.zip` beside it.
+Do not replace existing macros or settings when upgrading; the RCMS format and
+storage paths are unchanged.
 
 ## USB Connection
 
@@ -174,7 +203,21 @@ Native execution on future homebrew-capable Switch hardware depends on the avail
 Native Switch 2 execution has not been tested; a Switch 2 used as a connected
 USB target is not evidence of native compatibility.
 
-The Civilization VII automation has reached the CivSwitch exploit execution stage in testing. Macro Studio recording and playback still require further on-device verification.
+The Civilization VII automation has reached the CivSwitch exploit execution stage in testing. Live recording, Capture controls and playback have received hardware testing, but broader on-device verification remains necessary.
+
+### Known limitations
+
+- Recorded inputs describe sampled physical controller states, not necessarily
+  everything the USB host received during live passthrough. Brief transitions
+  can be recorded locally but omitted by latest-state forwarding.
+- Analog stick sampling, application/render scheduling, USB polling and game
+  frames can introduce small movement differences. Slow transfers or late ticks
+  can stretch playback; identical final in-game positions are not guaranteed.
+- Capture notifications depend on the homebrew launch environment. Registration
+  failures retain touchscreen controls; long-hold/video and screenshot restoration
+  behavior still need wider hardware verification.
+- USB compatibility across Switch hardware, docks, cables and role-negotiation
+  setups is not fully verified. Native Switch 2 execution has not been tested.
 
 ## Building From Source
 
@@ -200,24 +243,34 @@ build/RecurCIV.nro
 
 The build requires the included assets and `payload.txt`.
 
+Debug checkout paths are remapped so the same source and toolchain can produce
+a byte-identical NRO from different checkout directories.
+
 The embedded payload is checked against its expected SHA-256 hash and line count during building.
 
-Portable tests are provided in the `tests` directory.
+The complete host test suite (including UI previews) runs from a Visual Studio
+x64 Native Tools environment after the ARM build:
+
+```powershell
+cmd.exe /d /c tests\run-tests.cmd
+```
 
 The original editable payload source and generator are included in
 `upstream/CivSwitch/`. See [payload provenance and reproduction](docs/recurciv-payload.md).
 Ordinary building does not regenerate or change the approved payload.
 
-Release checks and packaging:
+Release packaging from a clean, committed source tree after building/testing:
 
 ```powershell
-py tools/run_portable_tests.py
-py tools/verify_release.py
 py tools/package_release.py
+py tools/package_release.py --verify-only
 ```
 
-The portable test wrapper deliberately excludes UI preview generation;
-preview images are not hardware verification.
+The packager includes the complete committed source and original legal notices,
+and validates both archives against that commit and the built NRO. A matching
+manifest records the commit, source-file hashes and NRO SHA-256. Generated builds,
+logs, previews and `node_modules` are excluded. Host tests and preview images are
+not substitutes for hardware verification.
 
 ## Credits and Licensing
 
@@ -244,7 +297,7 @@ under `upstream/`, `licences/`, and `third_party/`.
 
 ## Planned Improvements
 
-- Live macro recording that simultaneously controls the connected game.
+- On-device verification of live macro recording and receiving-game behavior.
 - Faster access to Macro Studio from controller mode.
 - Continued macro compatibility and hardware testing.
 - Additional usability improvements.

@@ -40,7 +40,7 @@ bool controller_route_input(const View *v,uint32_t down,bool monitor_exit,Action
     }
     if(v->screen==SCREEN_MACRO_STUDIO) {
         if(down&MON_B) *action=ACTION_BACK;
-        else if(down&MON_A) *action=v->selected==0?ACTION_STUDIO_MANUAL:ACTION_STUDIO_RECORD;
+        else if(down&MON_A) *action=v->selected==0?ACTION_STUDIO_MANUAL:v->selected==1?ACTION_STUDIO_RECORD:(Action)ACTION_MS_LIVE_RECORD;
         return true;
     }
     if(v->screen==SCREEN_KEYBOARD) {

@@ -18,7 +18,9 @@ int main(void) {
     v.screen=SCREEN_MACRO_STUDIO;v.selected=0;
     assert(view_touch(&v,100,200)==ACTION_STUDIO_MANUAL);
     assert(view_touch(&v,100,380)==ACTION_STUDIO_RECORD);
+    assert(view_touch(&v,100,520)==(Action)ACTION_MS_LIVE_RECORD);
     assert(view_studio_move(0,1)==1 && view_studio_move(1,-1)==0);
+    assert(view_studio_move(1,1)==2 && view_studio_move(2,1)==0 && view_studio_move(0,-1)==2);
     int dx,dy;LiveNav nav={0};
     view_menu_stick_direction(11999,11999,&dx,&dy);assert(!dx && !dy);
     view_menu_stick_direction(12000,-12000,&dx,&dy);assert(!dx && dy==1);
@@ -27,8 +29,22 @@ int main(void) {
     assert(view_studio_move(0,dy)==1);
     assert(ui_init());uint32_t *pixels=calloc(1280*720,sizeof(*pixels));assert(pixels);
     view_render(&v,pixels,1280*4);assert(pixels[160*1280+640]==0xff54aad9);
-    v.selected=1;view_render(&v,pixels,1280*4);assert(pixels[330*1280+640]==0xff54aad9);
+    v.selected=1;view_render(&v,pixels,1280*4);assert(pixels[315*1280+640]==0xff54aad9);
     assert(pixels[160*1280+640]!=0xff54aad9);
+    v.selected=2;view_render(&v,pixels,1280*4);assert(pixels[470*1280+640]==0xff54aad9);
+    v.screen=SCREEN_MACRO_RECORD;v.macro_live=v.macro_owned=true;v.macro_record_sync=true;
+    assert(view_touch(&v,1100,675)==(Action)ACTION_MS_LIVE_EXIT && view_macro_control_count(&v)==2);
+    assert(view_touch(&v,850,675)==ACTION_NONE);
+    v.macro_record_sync=false;assert(view_touch(&v,850,675)==(Action)ACTION_MS_RECORD_START);
+    v.macro_recording=true;assert(view_touch(&v,850,675)==(Action)ACTION_MS_RECORD_STOP);v.macro_recording=false;
+    v.macro_replace_pending=true;
+    assert(view_touch(&v,600,675)==(Action)ACTION_MS_REPLACE_RECORD && view_touch(&v,850,675)==(Action)ACTION_MS_KEEP_RECORD);
+    v.macro_replace_pending=false;
+    v.macro_record_sync=false;v.macro_record_cleanup=true;
+    assert(view_touch(&v,1100,675)==ACTION_NONE && !view_macro_control_count(&v));
+    v.macro_cleanup_blocked=true;
+    assert(view_touch(&v,1100,675)==(Action)ACTION_MS_RETRY && view_macro_control_count(&v)==1);
+    v.macro_live=v.macro_owned=v.macro_record_cleanup=v.macro_cleanup_blocked=false;
     const Screen screens[]={SCREEN_HOME,SCREEN_KEYBOARD,SCREEN_LIVE,SCREEN_FILES,SCREEN_CONFIRM,SCREEN_TRANSFER,
         SCREEN_CONTROLLER_MENU,SCREEN_CONTROLLER,SCREEN_MACRO_STUDIO,SCREEN_MACRO_LIBRARY,SCREEN_MACRO_DETAILS,
         SCREEN_MACRO_DELETE,SCREEN_CIV_PLACEHOLDER,SCREEN_DIAGNOSTICS,SCREEN_RESULT,

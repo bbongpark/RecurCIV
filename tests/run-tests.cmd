@@ -3,6 +3,12 @@ rem Run from a Visual Studio x64 Native Tools command prompt, after python build
 cd /d "%~dp0.."
 py tests\test_runner.py
 if not "%errorlevel%"=="0" exit /b 1
+py tests\test_payload.py
+if not "%errorlevel%"=="0" exit /b 1
+py tests\test_metadata.py
+if not "%errorlevel%"=="0" exit /b 1
+py tests\test_release_package.py
+if not "%errorlevel%"=="0" exit /b 1
 cl /nologo /std:c11 /utf-8 /O2 /W3 /D_CRT_SECURE_NO_WARNINGS /Iinclude /Ithird_party /Ibuild /Febuild\test_text.exe /Fobuild\ tests\test_text.c source\text.c source\view.c source\ui.c source\controller_monitor.c source\live_keyboard.c
 if not "%errorlevel%"=="0" exit /b 1
 build\test_text.exe
@@ -67,7 +73,19 @@ cl /nologo /std:c11 /utf-8 /O2 /W3 /WX /D_CRT_SECURE_NO_WARNINGS /Itests\mock /I
 if not "%errorlevel%"=="0" exit /b 1
 build\test_macro_runtime.exe
 if not "%errorlevel%"=="0" exit /b 1
-cl /nologo /std:c11 /utf-8 /O2 /W3 /WX /D_CRT_SECURE_NO_WARNINGS /Itests\mock /Iinclude /Ithird_party /Ibuild /Febuild\test_macro_app.exe /Fobuild\ tests\test_macro_app.c source\macro_app.c source\macro_runtime.c source\macro_editor.c source\macro_model.c source\macro_storage.c source\macro_files.c source\usb_keyboard.c source\controller_route.c source\controller_mode.c source\controller_monitor.c source\view.c source\ui.c source\text.c source\live_keyboard.c
+cl /nologo /std:c11 /utf-8 /O2 /W3 /WX /D_CRT_SECURE_NO_WARNINGS /Itests\mock /Iinclude /Ithird_party /Ibuild /Febuild\test_macro_timing.exe /Fobuild\ tests\test_macro_timing.c source\macro_runtime.c source\macro_live.c source\macro_model.c source\macro_storage.c source\usb_keyboard.c source\controller_route.c source\controller_mode.c source\controller_monitor.c source\view.c source\ui.c source\text.c source\live_keyboard.c
+if not "%errorlevel%"=="0" exit /b 1
+build\test_macro_timing.exe
+if not "%errorlevel%"=="0" exit /b 1
+cl /nologo /std:c11 /utf-8 /O2 /W3 /WX /Itests\mock /Iinclude /Febuild\test_macro_live.exe /Fobuild\ tests\test_macro_live.c source\macro_live.c source\macro_runtime.c source\macro_model.c source\macro_storage.c source\controller_mode.c source\controller_monitor.c
+if not "%errorlevel%"=="0" exit /b 1
+build\test_macro_live.exe
+if not "%errorlevel%"=="0" exit /b 1
+cl /nologo /std:c11 /utf-8 /O2 /W3 /WX /Itests\mock /Iinclude /Febuild\test_capture_control.exe /Fobuild\ tests\test_capture_control.c source\capture_control.c
+if not "%errorlevel%"=="0" exit /b 1
+build\test_capture_control.exe
+if not "%errorlevel%"=="0" exit /b 1
+cl /nologo /std:c11 /utf-8 /O2 /W3 /WX /D_CRT_SECURE_NO_WARNINGS /Itests\mock /Iinclude /Ithird_party /Ibuild /Febuild\test_macro_app.exe /Fobuild\ tests\test_macro_app.c source\capture_control.c source\macro_app.c source\macro_live.c source\macro_runtime.c source\macro_editor.c source\macro_model.c source\macro_storage.c source\macro_files.c source\usb_keyboard.c source\controller_route.c source\controller_mode.c source\controller_monitor.c source\view.c source\ui.c source\text.c source\live_keyboard.c
 if not "%errorlevel%"=="0" exit /b 1
 build\test_macro_app.exe
 if not "%errorlevel%"=="0" exit /b 1
@@ -91,7 +109,7 @@ cl /nologo /std:c11 /utf-8 /O2 /W3 /D_CRT_SECURE_NO_WARNINGS /Iinclude /Ithird_p
 if not "%errorlevel%"=="0" exit /b 1
 build\test_macro_view.exe
 if not "%errorlevel%"=="0" exit /b 1
-cl /nologo /std:c11 /utf-8 /O2 /W3 /WX /D_CRT_SECURE_NO_WARNINGS /Itests\mock /Iinclude /Ithird_party /Ibuild /Febuild\test_ui_recovery.exe /Fobuild\ tests\test_ui_recovery.c source\macro_app.c source\macro_runtime.c source\macro_editor.c source\macro_model.c source\macro_storage.c source\macro_files.c source\controller_route.c source\controller_mode.c source\controller_monitor.c source\view.c source\ui.c source\text.c source\live_keyboard.c
+cl /nologo /std:c11 /utf-8 /O2 /W3 /WX /D_CRT_SECURE_NO_WARNINGS /Itests\mock /Iinclude /Ithird_party /Ibuild /Febuild\test_ui_recovery.exe /Fobuild\ tests\test_ui_recovery.c source\macro_app.c source\macro_live.c source\macro_runtime.c source\macro_editor.c source\macro_model.c source\macro_storage.c source\macro_files.c source\controller_route.c source\controller_mode.c source\controller_monitor.c source\view.c source\ui.c source\text.c source\live_keyboard.c
 if not "%errorlevel%"=="0" exit /b 1
 build\test_ui_recovery.exe
 if not "%errorlevel%"=="0" exit /b 1

@@ -52,6 +52,10 @@ int main(void) {
     v.selected=view_studio_move(v.selected,1);assert(v.selected==1);
     { Action a;assert(controller_route_input(&v,MON_A,false,&a) && a==ACTION_STUDIO_RECORD);
       assert(!controller_route_action(&r,&v,a)); }
+    v.selected=view_studio_move(v.selected,1);assert(v.selected==2);
+    { Action a;assert(controller_route_input(&v,MON_A,false,&a) && a==(Action)ACTION_MS_LIVE_RECORD);
+      assert(!controller_route_action(&r,&v,a)); } /* MacroApp also owns live entry. */
+    assert(!tick(&r,&v,MON_A|MON_ZR) && !begin_count && !submit_count);
     press(&r,&v,MON_B);assert(v.screen==SCREEN_CONTROLLER_MENU);
     v.selected=2;press(&r,&v,MON_A);assert(v.screen==SCREEN_MACRO_LIBRARY);
     assert(!tick(&r,&v,MON_A|MON_DOWN) && !submit_count);

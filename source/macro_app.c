@@ -11,7 +11,7 @@ bool macro_app_screen(Screen s) {
     return s==SCREEN_MACRO_STUDIO || s==SCREEN_MACRO_LIBRARY || s==SCREEN_MACRO_DETAILS || s==SCREEN_MACRO_DELETE || (s>=SCREEN_MACRO_EDITOR && s<=SCREEN_MACRO_DISCARD);
 }
 bool macro_app_busy(const MacroApp *a) {
-    return a && (a->player.owned || a->recorder.state==MR_ARMING || a->recorder.state==MR_RECORDING);
+    return a && (a->player.owned || macro_live_busy(&a->live) || a->recorder.state==MR_ARMING || a->recorder.state==MR_RECORDING);
 }
 void macro_app_init(MacroApp *a,const char *root) { memset(a,0,sizeof(*a));a->root=root; }
 void macro_app_destroy(MacroApp *a) { if(a) { free(a->names);a->names=NULL; } }
@@ -41,6 +41,7 @@ static void enter(MacroApp *a,View *v,Screen s) {
 static void new_document(MacroApp *a) {
     MacroDocument d={0};strcpy(d.name,"Untitled");d.speed_percent=100;d.repeat_count=1;
     (void)macro_editor_open(&a->editor,&d,false);a->has_file=false;a->file_key[0]=0;a->cursor=0;
+    a->record_live=false;
 }
 static void dialog(MacroApp *a,MacroDialog kind,const char *title,const char *initial) {
     a->dialog=kind;snprintf(a->dialog_title,sizeof(a->dialog_title),"%s",title);
@@ -74,12 +75,35 @@ void macro_app_update(MacroApp *a,View *v) {
             if(n<d->sequence.count) view_macro_step(&d->sequence.steps[n],n,v->macro_steps[i],sizeof(v->macro_steps[i]),v->macro_step_details[i],sizeof(v->macro_step_details[i]));
         }
     }
-    v->macro_draft=a->draft;v->macro_owned=a->player.owned;v->macro_cleanup_blocked=a->player.state==MP_BLOCKED;
+    v->macro_draft=a->draft;v->macro_owned=a->player.owned || macro_live_busy(&a->live);
+    v->macro_cleanup_blocked=a->player.state==MP_BLOCKED;
     v->macro_neutral=a->player.neutral_confirmed;v->macro_iteration=a->player.repeat;
+    v->macro_live=v->screen==SCREEN_MACRO_RECORD && a->record_live;
+    v->macro_record_sync=v->macro_live && a->live.state==ML_SYNC;
+    v->macro_record_cleanup=v->macro_live && (a->live.state==ML_CLEANUP || a->live.state==ML_BLOCKED);
+    v->macro_replace_pending=a->replace_pending;
     v->macro_recording=a->recorder.state==MR_RECORDING;v->macro_arming=a->recorder.state==MR_ARMING;
+    if(v->macro_live && a->live.state==ML_ARMING) v->macro_arming=true;
     v->macro_has_recording=a->recorder.state>=MR_STOPPED;
+    if(v->macro_live && !a->recorder.sequence.count) v->macro_has_recording=false;
     if(v->screen==SCREEN_MACRO_RECORD) {
         v->macro_elapsed=a->recorder.elapsed_ms;v->macro_step_count=a->recorder.sequence.count;
+        if(a->record_live) {
+            v->macro_cleanup_blocked=a->live.state==ML_BLOCKED;v->macro_neutral=a->live.neutral_confirmed;
+            const char *s=a->live.state==ML_SYNC?"Synchronizing neutral USB output; capture has not started.":
+                a->live.state==ML_ARMING?"Release buttons, D-pad, both sticks and touch to begin.":
+                a->live.state==ML_READY?(a->recorder.state==MR_LIMIT?"Recording limit reached; capture retained. Passthrough continues.":
+                    a->recorder.sequence.count?"Capture retained. Passthrough continues; Exit live before Review/Save.":
+                    "Passthrough active. Capture or touch Start to record; Exit live to finish."):
+                a->live.state==ML_RECORDING?"Recording sampled inputs while forwarding live controller state.":
+                a->live.state==ML_CLEANUP?"Neutral cleanup pending. Keep USB connected; navigation is locked.":
+                a->live.state==ML_BLOCKED?"USB CLEANUP REQUIRED. Reconnect, then touch Retry cleanup.":
+                a->live.state==ML_STOPPED?(a->recorder.state==MR_LIMIT?"Recording limit reached; data retained. Neutral cleanup confirmed.":
+                    a->recorder.state==MR_INTERRUPTED?"Recording interrupted; data retained. Neutral confirmed; no automatic resume.":
+                    a->recorder.sequence.count?"Live session exited; neutral confirmed. Review captured states before saving.":
+                    "Live session exited; no capture. Return to Macro Studio."):NULL;
+            if(s) snprintf(v->macro_status,sizeof(v->macro_status),"%s",s);
+        }
     }
     if(v->screen==SCREEN_MACRO_PLAY) {
         v->macro_repeat=a->player.repeat_count;
@@ -101,7 +125,12 @@ void macro_app_tick(MacroApp *a,View *v,bool connected,uint32_t held,int32_t lx,
         bool owned=a->player.owned;macro_play_tick(&a->player,now);
         if(owned && !a->player.owned) a->input_locked=true;
     }
-    if(v->screen==SCREEN_MACRO_RECORD) {
+    if(macro_live_busy(&a->live)) {
+        macro_live_tick(&a->live,connected,held,lx,ly,rx,ry,touches,now);
+        if(a->live.state==ML_CLEANUP || a->live.state==ML_BLOCKED) a->replace_pending=false;
+        if(!macro_live_busy(&a->live)) a->input_locked=true;
+    }
+    if(v->screen==SCREEN_MACRO_RECORD && !a->record_live) {
         bool recording=a->recorder.state==MR_ARMING || a->recorder.state==MR_RECORDING;
         SwitchGamepadReport report=controller_monitor_report(held,lx,ly,rx,ry,connected);
         macro_record_sample(&a->recorder,&report,connected,!held && !touches,now);
@@ -113,6 +142,17 @@ void macro_app_tick(MacroApp *a,View *v,bool connected,uint32_t held,int32_t lx,
 }
 Action macro_app_input(MacroApp *a,View *v,uint32_t down,uint32_t held,int32_t sx,int32_t sy,unsigned touches,int x,int y,uint64_t now) {
     if(!macro_app_screen(v->screen)) return ACTION_NONE;
+    if(macro_live_busy(&a->live)) {
+        /* Physical gameplay buttons never navigate, confirm replacement or exit. */
+        Action hit=touches==1?view_touch(v,x,y):ACTION_NONE;
+        if(!a->input_locked && (hit==(Action)ACTION_MS_RECORD_STOP || hit==(Action)ACTION_MS_RETRY ||
+           hit==(Action)ACTION_MS_RECORD_START || hit==(Action)ACTION_MS_LIVE_EXIT ||
+           hit==(Action)ACTION_MS_REPLACE_RECORD || hit==(Action)ACTION_MS_KEEP_RECORD)) {
+            a->input_locked=true;return hit;
+        }
+        if(!touches) a->input_locked=false;
+        return ACTION_NONE;
+    }
     if(v->screen==SCREEN_MACRO_RECORD && (a->recorder.state==MR_ARMING || a->recorder.state==MR_RECORDING)) {
         /* All controller buttons belong to the recording, including +/- and B. */
         if(touches==1 && !a->input_locked && view_touch(v,x,y)==(Action)ACTION_MS_RECORD_STOP) {
@@ -142,6 +182,22 @@ Action macro_app_input(MacroApp *a,View *v,uint32_t down,uint32_t held,int32_t s
 }
 bool macro_app_action(MacroApp *a,View *v,Action action,uint64_t now,bool available) {
     if(!a || !v) return false;
+    if(macro_live_busy(&a->live)) {
+        if(action==ACTION_NONE) return true;
+        a->input_locked=true;
+        if((int)action==ACTION_MS_RECORD_STOP) macro_live_stop(&a->live,now);
+        else if((int)action==ACTION_MS_LIVE_EXIT) { a->replace_pending=false;macro_live_exit(&a->live,now); }
+        else if((int)action==ACTION_MS_KEEP_RECORD) a->replace_pending=false;
+        else if((int)action==ACTION_MS_REPLACE_RECORD && a->replace_pending) {
+            a->replace_pending=false;(void)macro_live_record_start(&a->live,true);
+        }
+        else if((int)action==ACTION_MS_RECORD_START && a->live.state==ML_READY && !a->replace_pending) {
+            if(a->recorder.sequence.count) a->replace_pending=true;
+            else (void)macro_live_record_start(&a->live,false);
+        }
+        else if((int)action==ACTION_MS_RETRY) (void)macro_live_retry_cleanup(&a->live);
+        macro_app_update(a,v);return true;
+    }
     if(action==ACTION_MACRO_STUDIO && v->screen==SCREEN_CONTROLLER_MENU) {
         v->macro_status[0]=0;enter(a,v,SCREEN_MACRO_STUDIO);macro_app_update(a,v);return true;
     }
@@ -160,10 +216,15 @@ bool macro_app_action(MacroApp *a,View *v,Action action,uint64_t now,bool availa
         if((int)action==ACTION_MS_RECORD_STOP) macro_record_stop(&a->recorder,now);
         macro_app_update(a,v);return true;
     }
+    if((action==ACTION_STUDIO_MANUAL || action==ACTION_STUDIO_RECORD || (int)action==ACTION_MS_LIVE_RECORD) &&
+       (a->recorder.sequence.count || (a->editor.current.sequence.count && macro_editor_dirty(&a->editor)))) {
+        a->pending_action=action;a->return_screen=v->screen;enter(a,v,SCREEN_MACRO_DISCARD);
+        macro_app_update(a,v);return true;
+    }
     v->macro_status[0]=0;
     if(action==ACTION_BACK) {
         if(v->screen==SCREEN_MACRO_STEP) enter(a,v,SCREEN_MACRO_EDITOR);
-        else if(v->screen==SCREEN_MACRO_DISCARD) enter(a,v,a->return_screen);
+        else if(v->screen==SCREEN_MACRO_DISCARD) { a->pending_action=ACTION_NONE;enter(a,v,a->return_screen); }
         else if(v->screen==SCREEN_MACRO_EDITOR && macro_editor_dirty(&a->editor)) { a->return_screen=SCREEN_MACRO_EDITOR;enter(a,v,SCREEN_MACRO_DISCARD); }
         else if(v->screen==SCREEN_MACRO_EDITOR) enter(a,v,a->has_file?SCREEN_MACRO_DETAILS:SCREEN_MACRO_STUDIO);
         else if(v->screen==SCREEN_MACRO_PLAY) enter(a,v,a->return_screen);
@@ -174,8 +235,15 @@ bool macro_app_action(MacroApp *a,View *v,Action action,uint64_t now,bool availa
         else enter(a,v,SCREEN_CONTROLLER_MENU);
     } else if(action==ACTION_STUDIO_MANUAL) {
         new_document(a);enter(a,v,SCREEN_MACRO_EDITOR);
-    } else if(action==ACTION_STUDIO_RECORD) {
-        new_document(a);memset(&a->recorder,0,sizeof(a->recorder));enter(a,v,SCREEN_MACRO_RECORD);
+    } else if(action==ACTION_STUDIO_RECORD || (int)action==ACTION_MS_LIVE_RECORD) {
+        bool live=(int)action==ACTION_MS_LIVE_RECORD;
+        if(live && (!available || !macro_live_start(&a->live,&a->recorder))) {
+            snprintf(v->macro_status,sizeof(v->macro_status),"Live Record needs ready USB and exclusive ownership. Nothing started.");
+            macro_app_update(a,v);return true;
+        }
+        new_document(a);memset(&a->recorder,0,sizeof(a->recorder));
+        if(!live) memset(&a->live,0,sizeof(a->live));
+        a->record_live=live;a->replace_pending=false;a->dialog=MD_NONE;enter(a,v,SCREEN_MACRO_RECORD);
     } else if(action==ACTION_MACRO_REFRESH) refresh(a,v);
     else if(action==ACTION_MACRO_PREV || action==ACTION_MACRO_NEXT) {
         if(v->screen==SCREEN_MACRO_LIBRARY) {
@@ -200,12 +268,23 @@ bool macro_app_action(MacroApp *a,View *v,Action action,uint64_t now,bool availa
         MacroStoreResult r=macro_store_delete(a->root,a->file_key);refresh(a,v);enter(a,v,SCREEN_MACRO_LIBRARY);result(v,r);
     } else switch((int)action) {
     case ACTION_MS_RECORD_START:
-        if(available) macro_record_start(&a->recorder);
+        if(v->screen!=SCREEN_MACRO_RECORD) break;
+        if(a->record_live) break; /* Exited sessions cannot restart implicitly. */
+        if(a->recorder.sequence.count) a->replace_pending=true;
+        else if(available) macro_record_start(&a->recorder);
         else snprintf(v->macro_status,sizeof(v->macro_status),"Another input mode is active; recording not started.");
+        break;
+    case ACTION_MS_KEEP_RECORD: a->replace_pending=false;break;
+    case ACTION_MS_REPLACE_RECORD:
+        if(a->replace_pending && !a->record_live && available) {
+            a->replace_pending=false;macro_record_start(&a->recorder);
+        }
         break;
     case ACTION_MS_REVIEW: {
         MacroDocument d=a->editor.current;d.sequence=a->recorder.sequence;
-        if(macro_editor_change(&a->editor,&d)) enter(a,v,SCREEN_MACRO_EDITOR);
+        if(macro_editor_change(&a->editor,&d)) {
+            memset(&a->recorder,0,sizeof(a->recorder));a->replace_pending=false;enter(a,v,SCREEN_MACRO_EDITOR);
+        }
         break;
     }
     case ACTION_MS_PREV_STEP: if(a->cursor) a->cursor--;break;
@@ -253,6 +332,12 @@ bool macro_app_action(MacroApp *a,View *v,Action action,uint64_t now,bool availa
         if(v->screen==SCREEN_MACRO_RECORD && a->recorder.sequence.count) {
             a->return_screen=SCREEN_MACRO_RECORD;enter(a,v,SCREEN_MACRO_DISCARD);break;
         }
+        if(v->screen==SCREEN_MACRO_DISCARD && a->pending_action!=ACTION_NONE) {
+            Action next=a->pending_action;a->pending_action=ACTION_NONE;
+            new_document(a);memset(&a->recorder,0,sizeof(a->recorder));
+            enter(a,v,SCREEN_MACRO_STUDIO);
+            return macro_app_action(a,v,next,now,available);
+        }
         if(v->screen==SCREEN_MACRO_DISCARD && a->editor.has_saved) { MacroDocument d=a->editor.saved;macro_editor_open(&a->editor,&d,true); }
         else new_document(a);
         memset(&a->recorder,0,sizeof(a->recorder));enter(a,v,SCREEN_MACRO_STUDIO);break;
@@ -272,7 +357,15 @@ bool macro_app_action(MacroApp *a,View *v,Action action,uint64_t now,bool availa
     }
     macro_app_update(a,v);return true;
 }
+void macro_app_capture(MacroApp *a,View *v,uint64_t now) {
+    if(!a || !v || v->screen!=SCREEN_MACRO_RECORD || !a->live.owned || a->replace_pending) return;
+    if(a->live.state==ML_RECORDING)
+        (void)macro_app_action(a,v,(Action)ACTION_MS_RECORD_STOP,now,true);
+    else if(a->live.state==ML_READY)
+        (void)macro_app_action(a,v,(Action)ACTION_MS_RECORD_START,now,true);
+}
 void macro_app_dialog_result(MacroApp *a,View *v,bool accepted,const char *text) {
+    if(macro_app_busy(a)) { a->dialog=MD_NONE;return; }
     MacroDialog kind=a->dialog;a->dialog=MD_NONE;a->input_locked=true;
     if(!accepted || !text) { snprintf(v->macro_status,sizeof(v->macro_status),"Dialog cancelled; changes kept.");return; }
     if(kind==MD_SAVE || kind==MD_RENAME || kind==MD_DUPLICATE) {

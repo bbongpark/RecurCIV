@@ -71,11 +71,16 @@ bool macro_play_retry_cleanup(MacroPlayer *p) {
     if(!p || !p->owned || p->state!=MP_BLOCKED) return false;
     p->state=MP_CLEANUP;p->stop_queued=false;return true;
 }
-static void submit(MacroPlayer *p) {
+static void submit(MacroPlayer *p,uint64_t now) {
     if(gamepad_exclusive_status()!=GAMEPAD_EXCLUSIVE_READY) return;
     const SwitchGamepadReport *r=p->loop_gap?&neutral:&p->document->sequence.steps[p->step].report;
     p->duration_ms=p->loop_gap?p->document->loop_delay_ms:duration(p->document,p->step);
     if(!gamepad_exclusive_submit(r)) { cleanup(p,MP_FAILED);return; }
+    /* This is acceptance by the exclusive session, not a host delivery time.
+       Start the full logical hold here so waiting for this report's completion
+       does not get added to every recorded interval. The pending gate below
+       still preserves every transition and prevents competing submissions. */
+    p->submitted_at=now;
     p->state=MP_PENDING;
 }
 void macro_play_tick(MacroPlayer *p,uint64_t now) {
@@ -100,19 +105,24 @@ void macro_play_tick(MacroPlayer *p,uint64_t now) {
     case MP_SYNC:
         if(owner==GAMEPAD_EXCLUSIVE_READY) p->state=MP_SUBMIT;
         break;
-    case MP_SUBMIT: submit(p);break;
+    case MP_SUBMIT: submit(p,now);break;
     case MP_PENDING:
-        if(owner==GAMEPAD_EXCLUSIVE_READY) { p->completed_at=now;p->state=MP_HOLD; }
-        break;
+        if(owner!=GAMEPAD_EXCLUSIVE_READY) return;
+        p->completed_at=now;p->state=MP_HOLD;
+        /* Completion may be observed after the deadline. Do not add another
+           loop iteration, or skip ahead to a later report, in that case. */
+        /* fall through */
     case MP_HOLD:
-        if(now<p->completed_at || now-p->completed_at<p->duration_ms) return;
+        if(now<p->submitted_at || now-p->submitted_at<p->duration_ms) return;
         if(p->loop_gap) { p->loop_gap=false;p->step=0;p->repeat++; }
         else if(++p->step==p->document->sequence.count) {
             if(p->repeat==p->repeat_count) { cleanup(p,MP_FINISHED);return; }
             p->loop_gap=true;
         }
-        /* Submit at the hold deadline, not one extra UI iteration later. */
-        p->state=MP_SUBMIT;submit(p);break;
+        /* Each newly accepted state gets its FULL scaled duration from now.
+           No catch-up compression after late ticks/completions, no skipped
+           button edges, and no assumed/hardcoded transport latency. */
+        p->state=MP_SUBMIT;submit(p,now);break;
     default: break;
     }
 }

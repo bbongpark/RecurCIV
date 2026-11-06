@@ -34,10 +34,14 @@ static void playback(void) {
     macro_play_tick(&p,100000);assert(p.state==MP_SUBMIT);macro_play_tick(&p,100000);
     assert(submissions==1 && !memcmp(&sent,&doc.sequence.steps[0].report,8));
     macro_play_tick(&p,1000000);assert(p.state==MP_PENDING && submissions==1);
-    owner=GAMEPAD_EXCLUSIVE_READY;macro_play_tick(&p,1000000);assert(p.state==MP_HOLD);
-    macro_play_tick(&p,999999);macro_play_tick(&p,1000049);assert(p.state==MP_HOLD);
-    macro_play_tick(&p,1000050);assert(p.state==MP_PENDING && p.step==1 && submissions==2);
-    uint64_t now=1000050;unsigned limit=100;
+    /* A very late completion gates order, but does not restart the old hold.
+       Advance only one step, and give the new step its full logical duration. */
+    owner=GAMEPAD_EXCLUSIVE_READY;macro_play_tick(&p,1000000);
+    assert(p.state==MP_PENDING && p.step==1 && submissions==2 && p.submitted_at==1000000);
+    owner=GAMEPAD_EXCLUSIVE_READY;macro_play_tick(&p,1000005);assert(p.state==MP_HOLD);
+    macro_play_tick(&p,999999);macro_play_tick(&p,1000019);assert(p.state==MP_HOLD);
+    macro_play_tick(&p,1000020);assert(p.state==MP_PENDING && p.loop_gap && submissions==3);
+    uint64_t now=1000020;unsigned limit=100;
     while(p.state!=MP_CLEANUP && --limit) {
         if(owner==GAMEPAD_EXCLUSIVE_PENDING) owner=GAMEPAD_EXCLUSIVE_READY;
         macro_play_tick(&p,now);now+=p.state==MP_HOLD?p.duration_ms:1;
@@ -72,9 +76,9 @@ static void playback(void) {
         assert(macro_play_start(&p,&doc,0));owner=GAMEPAD_EXCLUSIVE_READY;
         macro_play_tick(&p,0);macro_play_tick(&p,0);
         unsigned hold=(50*100+speeds[i]-1)/speeds[i];assert(p.duration_ms==hold);
-        owner=GAMEPAD_EXCLUSIVE_READY;macro_play_tick(&p,100);
-        macro_play_tick(&p,100+hold-1);assert(p.state==MP_HOLD && submissions==1);
-        macro_play_tick(&p,100+hold);assert(p.state==MP_PENDING && submissions==2);
+        owner=GAMEPAD_EXCLUSIVE_READY;macro_play_tick(&p,5);
+        macro_play_tick(&p,hold-1);assert(p.state==MP_HOLD && submissions==1);
+        macro_play_tick(&p,hold);assert(p.state==MP_PENDING && submissions==2);
         macro_play_cancel(&p);cleanup_done(&p,MP_CANCELLED);
     }
     setup(&p);ready=false;assert(!macro_play_start(&p,&doc,0) && !p.owned);
@@ -102,4 +106,4 @@ static void recording(void) {
     macro_record_start(&recorder);macro_record_sample(&recorder,&neutral,true,true,100);macro_record_sample(&recorder,&pressed,true,false,99);
     assert(recorder.state==MR_INTERRUPTED);
 }
-int main(void) { playback();recording();puts("PASS: bounded macro recording, combinations/sticks/holds/neutral timing, completion-aware playback, finite repeats, cancellation and interrupted cleanup/retry.");return 0; }
+int main(void) { playback();recording();puts("PASS: bounded macro recording, submission-relative full holds, completion/order gates, speed scaling, finite repeats, cancellation and interrupted cleanup/retry.");return 0; }

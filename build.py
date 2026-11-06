@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 import subprocess
 
+VERSION='1.1.0'
 root=Path(__file__).resolve().parent
 kit=Path(os.environ.get('PLUME_DEVKITPRO', 'C:/devkitPro' if os.name=='nt' else '/opt/devkitpro'))
 exe='.exe' if os.name=='nt' else ''
@@ -43,6 +44,8 @@ with (build/'fonts.h').open('w') as header:
 
 flags=['-std=gnu11','-O2','-g','-Wall','-Wextra','-Wformat=2','-Werror=implicit-function-declaration',
        '-Werror=incompatible-pointer-types','-ffunction-sections','-fdata-sections',
+       # Keep debug checkout paths out of the linker's build-ID calculation.
+       f'-fdebug-prefix-map={root}=.',f'-fdebug-prefix-map={root.as_posix()}=.',
        '-march=armv8-a+crc+crypto','-mtune=cortex-a57','-mtp=soft','-fPIE','-D__SWITCH__',
        '-Iinclude','-Ithird_party','-Ibuild',f'-I{kit.as_posix()}/libnx/include']
 objects=[]
@@ -54,6 +57,6 @@ target=build/'RecurCIV'
 run(gcc,f'-specs={kit.as_posix()}/libnx/switch.specs',
     '-march=armv8-a+crc+crypto','-mtune=cortex-a57','-mtp=soft','-fPIE',
     f'-Wl,-Map,{target.as_posix()}.map','-Wl,-u,recurciv_payload',*objects,f'-L{kit.as_posix()}/libnx/lib','-lnx','-lm','-o',str(target)+'.elf')
-run(tools/f'nacptool{exe}','--create','RecurCIV','OR3OTHUG','1.0.0',str(target)+'.nacp')
+run(tools/f'nacptool{exe}','--create','RecurCIV','OR3OTHUG',VERSION,str(target)+'.nacp')
 run(tools/f'elf2nro{exe}',str(target)+'.elf',str(target)+'.nro',f'--nacp={target.as_posix()}.nacp',f'--icon={root.as_posix()}/assets/recurciv-icon.jpg')
 print('Built:',str(target)+'.nro')

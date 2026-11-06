@@ -96,7 +96,7 @@ int main(void) {
     edge(&route,&v,MON_A);assert(v.screen==SCREEN_MACRO_STUDIO && v.selected==0);
     header_footer(&v,"MACRO STUDIO");assert(actual[160*1280+640]==rgb(0xd9aa54));
     edge(&route,&v,MON_DOWN);assert(v.selected==1);
-    draw(&v);assert(actual[160*1280+640]==rgb(0x40536b) && actual[330*1280+640]==rgb(0xd9aa54));
+    draw(&v);assert(actual[160*1280+640]==rgb(0x40536b) && actual[315*1280+640]==rgb(0xd9aa54));
     int dx,dy;LiveNav nav={0};
     view_menu_stick_direction(0,11999,&dx,&dy);assert(!dx && !dy);
     view_menu_stick_direction(0,20000,&dx,&dy);assert(dy==-1);
@@ -109,6 +109,21 @@ int main(void) {
     assert(macro_app_action(&macro_app,&v,view_touch(&v,100,400),1,true));assert(v.screen==SCREEN_MACRO_RECORD);
     header_footer(&v,"MACRO RECORDING");text_at(72,210,32,0xd9aa54,"READY TO RECORD");
     edge(&route,&v,MON_B);assert(v.screen==SCREEN_MACRO_STUDIO);
+    edge(&route,&v,MON_DOWN);edge(&route,&v,MON_DOWN);assert(v.selected==2);
+    draw(&v);assert(actual[470*1280+640]==rgb(0xd9aa54));text_at(75,495,32,0xffffff,"LIVE RECORD");
+    edge(&route,&v,MON_A);assert(v.screen==SCREEN_MACRO_RECORD && macro_app.record_live && begins==1);
+    header_footer(&v,"MACRO RECORDING");text_at(72,210,32,0xd9aa54,"SYNCHRONIZING NEUTRAL OUTPUT");
+    owner=GAMEPAD_EXCLUSIVE_READY;macro_app_tick(&macro_app,&v,true,0,0,0,0,0,0,2);
+    header_footer(&v,"MACRO RECORDING");text_at(72,210,32,0xd9aa54,"LIVE CONTROLLER - NOT RECORDING");
+    assert(view_touch(&v,850,675)==(Action)ACTION_MS_RECORD_START && view_touch(&v,1100,675)==(Action)ACTION_MS_LIVE_EXIT);
+    assert(macro_app_action(&macro_app,&v,(Action)ACTION_MS_LIVE_EXIT,3,true));
+    header_footer(&v,"MACRO RECORDING");text_at(72,210,32,0xd9aa54,"NEUTRALIZING USB OUTPUT");
+    assert(!view_footer(&v).count);
+    v.macro_cleanup_blocked=true;header_footer(&v,"MACRO RECORDING");text_at(72,210,32,0xd9aa54,"USB CLEANUP REQUIRED");
+    assert(view_touch(&v,1100,675)==(Action)ACTION_MS_RETRY);
+    owner=GAMEPAD_EXCLUSIVE_OFF;macro_app_tick(&macro_app,&v,true,0,0,0,0,0,0,4);
+    edge(&route,&v,MON_B);assert(v.screen==SCREEN_MACRO_STUDIO);
+    begins=submits=stops=0; /* The completed live session left no USB writer. */
     edge(&route,&v,MON_B);assert(v.screen==SCREEN_CONTROLLER_MENU);
     edge(&route,&v,MON_DOWN);edge(&route,&v,MON_DOWN);edge(&route,&v,MON_A);
     assert(v.screen==SCREEN_MACRO_LIBRARY && !begins && !submits);

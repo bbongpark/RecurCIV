@@ -1,5 +1,9 @@
 # Macro Studio: inspection and implementation handoff
 
+**Historical handoff:** the implementation-status statements below predate the
+current editor, recorder and playback integration. See [Macro Studio](macro-studio.md)
+and the production source/tests for current local and live recording behavior.
+
 **Recovery update (2026-11-05):** see [UI recovery](ui-recovery.md) for the current
 UI/routing state, baseline failure evidence, tests and hardware checklist. The
 "Next" and proposed-integration sections below are historical plans, not authority

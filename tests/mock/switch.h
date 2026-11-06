@@ -41,8 +41,17 @@ enum { Kernel_TimedOut=1,Kernel_InvalidState=2 };
 uint32_t hosversionGet(void);
 bool hosversionBefore(unsigned,unsigned,unsigned);
 int appletGetAppletType(void);
+enum { AppletType_Application=0,AppletType_LibraryApplet=2 };
 Result appletSetAutoSleepDisabled(bool flag);
 Result appletIsAutoSleepDisabled(bool *out);
+typedef enum { AppletHookType_OnFocusState,AppletHookType_OnOperationMode,AppletHookType_OnPerformanceMode,
+    AppletHookType_OnExitRequest,AppletHookType_OnResume,AppletHookType_OnCaptureButtonShortPressed } AppletHookType;
+typedef enum { AppletFocusState_InFocus=1,AppletFocusState_OutOfFocus,AppletFocusState_Background } AppletFocusState;
+typedef struct AppletHookCookie { struct AppletHookCookie *next;void (*callback)(AppletHookType,void *);void *param; } AppletHookCookie;
+void appletHook(AppletHookCookie *,void (*callback)(AppletHookType,void *),void *);
+void appletUnhook(AppletHookCookie *);
+AppletFocusState appletGetFocusState(void);
+Result appletSetRequiresCaptureButtonShortPressedMessage(bool);
 void armDCacheFlush(void *,size_t);
 Result eventWait(Event *,uint64_t);
 Result eventClear(Event *);

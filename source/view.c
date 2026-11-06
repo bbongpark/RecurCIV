@@ -96,16 +96,34 @@ ViewFooter view_footer(const View *v) {
         f.buttons[0]=(ViewFooterButton){760,220,"Discard edits",(Action)ACTION_MS_DISCARD};
         f.buttons[1]=(ViewFooterButton){996,214,"Keep editing",ACTION_BACK};break;
     case SCREEN_MACRO_RECORD:
-        if(v->macro_recording || v->macro_arming) {
-            f.hints="All controller input is recorded locally. Touch Stop to finish.";
+        if(v->macro_record_cleanup) {
+            f.hints=v->macro_cleanup_blocked?"Touch Retry cleanup; captured data is retained.":"Waiting for neutral USB completion. Keep USB connected.";
+            f.count=v->macro_cleanup_blocked?1:0;
+            if(f.count) f.buttons[0]=(ViewFooterButton){930,280,"Retry cleanup",(Action)ACTION_MS_RETRY};
+        } else if(v->macro_replace_pending) {
+            f.hints="Replace unsaved capture? Touch only.";f.count=v->macro_owned?3:2;
+            f.buttons[0]=(ViewFooterButton){510,270,"Discard + record",(Action)ACTION_MS_REPLACE_RECORD};
+            f.buttons[1]=(ViewFooterButton){790,210,"Keep capture",(Action)ACTION_MS_KEEP_RECORD};
+            if(v->macro_owned) f.buttons[2]=(ViewFooterButton){1010,200,"Exit live",(Action)ACTION_MS_LIVE_EXIT};
+        } else if(v->macro_live && v->macro_owned) {
+            f.hints="Capture: Start/Stop. Touch controls available.";
+            f.count=2;
+            f.buttons[0]=(ViewFooterButton){700,300,v->macro_recording?"Stop recording":"Start recording",
+                (Action)(v->macro_recording?ACTION_MS_RECORD_STOP:ACTION_MS_RECORD_START)};
+            if(v->macro_record_sync || v->macro_arming) f.buttons[0]=(ViewFooterButton){700,300,"Release controls",ACTION_NONE};
+            f.buttons[1]=(ViewFooterButton){1010,200,"Exit live",(Action)ACTION_MS_LIVE_EXIT};
+        } else if(v->macro_recording || v->macro_arming || v->macro_record_sync) {
+            f.hints=v->macro_live?"Live forwarding + local capture. Touch Stop to finish.":"All controller input is recorded locally. Touch Stop to finish.";
             f.buttons[0]=(ViewFooterButton){1020,190,"Stop",(Action)ACTION_MS_RECORD_STOP};
         } else if(v->macro_has_recording) {
             f.hints="Review captured input before saving.";f.count=3;
             f.buttons[0]=(ViewFooterButton){640,180,"Review",(Action)ACTION_MS_REVIEW};
             f.buttons[1]=(ViewFooterButton){836,180,"Discard",(Action)ACTION_MS_DISCARD};
             f.buttons[2]=(ViewFooterButton){1030,180,"Back",ACTION_BACK};
+        } else if(v->macro_live) {
+            f.hints="Live session ended. Return to Macro Studio to enter again.";
         } else {
-            f.hints="A Select    B Back    No live forwarding";f.count=2;
+            f.hints=v->macro_live?"A Select    B Back    Live USB recording":"A Select    B Back    No live forwarding";f.count=2;
             f.buttons[0]=(ViewFooterButton){740,280,"Start recording",(Action)ACTION_MS_RECORD_START};
             f.buttons[1]=(ViewFooterButton){1036,174,"Back",ACTION_BACK};
         }
@@ -188,7 +206,7 @@ static void shared_footer(const View *v) {
             else snprintf(label,sizeof(label),"-  Diagnostics");
             text=label;
         }
-        size_t offset=v->screen==SCREEN_MACRO_STUDIO?2:v->screen==SCREEN_MACRO_LIBRARY?(size_t)v->file_rows:
+        size_t offset=v->screen==SCREEN_MACRO_STUDIO?3:v->screen==SCREEN_MACRO_LIBRARY?(size_t)v->file_rows:
             v->screen==SCREEN_MACRO_DETAILS?5:v->screen==SCREEN_MACRO_DELETE?1:v->screen==SCREEN_MACRO_EDITOR?15:0;
         bool macro_focus=(v->screen==SCREEN_MACRO_STUDIO || v->screen==SCREEN_MACRO_LIBRARY || v->screen==SCREEN_MACRO_DETAILS ||
             v->screen==SCREEN_MACRO_DELETE || v->screen>=SCREEN_MACRO_EDITOR) && (size_t)v->selected==i+offset;
@@ -417,7 +435,7 @@ bool view_adjust_typing_setting(View *v,Action action) {
     else return false;
     return true;
 }
-int view_studio_move(int selected,int direction) { (void)direction;return selected==0?1:0; }
+int view_studio_move(int selected,int direction) { return (selected+(direction>0?1:2))%3; }
 void view_menu_stick_direction(int32_t x,int32_t y,int *dx,int *dy) {
     if(!dx || !dy) return;
     *dx=*dy=0;
@@ -447,13 +465,13 @@ void view_macro_step(const MacroStep *step,size_t index,char *label,size_t label
 }
 size_t view_macro_control_count(const View *v) {
     switch(v->screen) {
-    case SCREEN_MACRO_STUDIO: return 3;
+    case SCREEN_MACRO_STUDIO: return 4;
     case SCREEN_MACRO_LIBRARY: return (size_t)v->file_rows+4;
     case SCREEN_MACRO_DETAILS: return 9;
     case SCREEN_MACRO_DELETE: return 2;
     case SCREEN_MACRO_EDITOR: return 16;
     case SCREEN_MACRO_STEP: return 21;
-    case SCREEN_MACRO_RECORD: return v->macro_recording || v->macro_arming?1:v->macro_has_recording?3:2;
+    case SCREEN_MACRO_RECORD: return view_footer(v).count;
     case SCREEN_MACRO_PLAY: return 1;
     case SCREEN_MACRO_DISCARD: return 2;
     default: return 0;
@@ -475,8 +493,8 @@ ViewControl view_macro_control(const View *v,unsigned i) {
     }
     unsigned footer=0;
     if(v->screen==SCREEN_MACRO_STUDIO) {
-        if(i<2) return (ViewControl){48,160+(int)i*170,1184,140,i?ACTION_STUDIO_RECORD:ACTION_STUDIO_MANUAL};
-        footer=i-2;
+        if(i<3) return (ViewControl){48,160+(int)i*155,1184,140,i==0?ACTION_STUDIO_MANUAL:i==1?ACTION_STUDIO_RECORD:(Action)ACTION_MS_LIVE_RECORD};
+        footer=i-3;
     } else if(v->screen==SCREEN_MACRO_LIBRARY) {
         if(i<(unsigned)v->file_rows) return (ViewControl){48,180+(int)i*50,1184,46,(Action)(ACTION_ROW0+i)};
         footer=i-(unsigned)v->file_rows;
@@ -545,10 +563,20 @@ static void render_macro_workspace(const View *v) {
         ui_text(48,140,20,p.muted,"Toggle combinations. Hat: 0=Up, clockwise to 7; 8=neutral. Stick range 0-255.",1184);macro_controls(v);
     } else if(v->screen==SCREEN_MACRO_RECORD) {
         card_frame(48,175,1184,390,false);
-        ui_text(72,210,32,color(0xd9aa54),v->macro_arming?"RELEASE CONTROLS TO BEGIN":v->macro_recording?"RECORDING - LOCAL ONLY":v->macro_has_recording?"RECORDING STOPPED":"READY TO RECORD",1120);
+        const char *title=v->macro_record_cleanup?(v->macro_cleanup_blocked?"USB CLEANUP REQUIRED":"NEUTRALIZING USB OUTPUT"):
+            v->macro_replace_pending?"REPLACE UNSAVED CAPTURE?":
+            v->macro_record_sync?"SYNCHRONIZING NEUTRAL OUTPUT":v->macro_arming?"RELEASE CONTROLS TO BEGIN":
+            v->macro_recording?(v->macro_live?"LIVE RECORDING":"RECORDING - LOCAL ONLY"):
+            v->macro_live && v->macro_owned?"LIVE CONTROLLER - NOT RECORDING":
+            v->macro_has_recording?"RECORDING STOPPED":v->macro_live?"LIVE SESSION ENDED":"READY TO RECORD";
+        ui_text(72,210,32,color(0xd9aa54),title,1120);
         snprintf(text,sizeof(text),"Elapsed %02llu:%02llu   |   %zu completed states",(unsigned long long)(v->macro_elapsed/60000),
             (unsigned long long)(v->macro_elapsed/1000%60),v->macro_step_count);ui_text(72,280,24,p.ink,text,1120);
-        ui_wrap(72,350,1100,24,4,p.muted,"All supported controller buttons and sticks are captured after release-to-arm. Nothing is forwarded. Touch Stop to finish, then review and edit before saving. Limits: 1024 states / 10 minutes.");
+        ui_wrap(72,350,1100,24,4,p.muted,v->macro_live?
+            "Passthrough continues before, during and after recording. Capture short press or touch Start/Stop. Exit live and wait for neutral cleanup before Review/Save. Capture is never a macro input. Limits: 1024 states / 10 minutes.":
+            "All supported controller buttons and sticks are captured after release-to-arm. Nothing is forwarded. Touch Stop to finish, then review and edit before saving. Limits: 1024 states / 10 minutes.");
+        if(v->macro_status[0]) ui_wrap(72,475,1100,20,2,color(0xd9aa54),v->macro_status);
+        if(v->macro_live && v->macro_capture_status[0]) ui_wrap(72,577,1100,20,2,color(0xd9aa54),v->macro_capture_status);
     } else if(v->screen==SCREEN_MACRO_PLAY) {
         card_frame(48,175,1184,390,false);
         ui_wrap(72,210,1100,24,2,color(0xd9aa54),v->macro_status);
@@ -556,7 +584,7 @@ static void render_macro_workspace(const View *v) {
             v->macro_step_count,v->macro_iteration,v->macro_repeat);ui_text(72,310,32,p.ink,text,1120);
         snprintf(text,sizeof(text),"Elapsed %02llu:%02llu",(unsigned long long)(v->macro_elapsed/60000),(unsigned long long)(v->macro_elapsed/1000%60));
         ui_text(72,370,24,p.muted,text,1120);
-        ui_wrap(72,430,1100,20,3,p.muted,"Hold intervals begin after USB completion. Stop schedules neutral cleanup; navigation stays locked until it completes. Reconnection never resumes the macro.");
+        ui_wrap(72,430,1100,20,3,p.muted,"Holds are timed from state submission; completion still gates the next state. Late USB/ticks can stretch timing. Stop requests neutral cleanup; navigation stays locked until completion. Reconnection never resumes playback.");
     } else if(v->screen==SCREEN_MACRO_DISCARD) {
         card_frame(48,175,1184,350,true);ui_text(72,220,32,p.ink,"Discard unsaved macro changes?",1120);
         ui_wrap(72,300,1100,24,3,p.muted,"The saved file is not changed. Choose Keep editing to return. Discard requires an explicit confirmation.");
@@ -565,7 +593,7 @@ static void render_macro_workspace(const View *v) {
         for(int i=0;i<v->file_rows;i++) { ViewControl c=view_macro_control(v,(unsigned)i);card_frame(c.x,c.y,c.w,c.h,i==v->selected);ui_text(c.x+16,c.y+11,24,p.ink,v->files[i],c.w-32); }
         if(!v->file_rows) ui_text(72,240,24,p.muted,"No macros. Create one in Macro Studio, then Save.",1100);
     }
-    if(v->screen!=SCREEN_MACRO_PLAY && v->macro_status[0]) ui_text(48,616,20,color(0xd9aa54),v->macro_status,1184);
+    if(v->screen!=SCREEN_MACRO_PLAY && v->screen!=SCREEN_MACRO_RECORD && v->macro_status[0]) ui_text(48,616,20,color(0xd9aa54),v->macro_status,1184);
 }
 Action view_home_action(Screen screen,bool plus,bool back,bool y,bool a,int selected) {
     if(screen!=SCREEN_HOME) return ACTION_NONE;
@@ -579,6 +607,8 @@ void view_render(const View *v,uint32_t *pixels,int stride) {
     ui_begin(pixels,stride); Palette p=ui_palette;
     shared_header(v->screen);
     shared_footer(v);
+    if(!v->macro_live && v->macro_capture_status[0])
+        ui_text(48,616,20,color(0xd9aa54),v->macro_capture_status,1184);
     if(v->screen==SCREEN_MACRO_LIBRARY || v->screen==SCREEN_MACRO_DETAILS || v->screen>=SCREEN_MACRO_EDITOR) { render_macro_workspace(v);return; }
     if(v->screen==SCREEN_KEYBOARD || v->screen==SCREEN_FILES || v->screen==SCREEN_CONFIRM || v->screen==SCREEN_TRANSFER || v->screen==SCREEN_RESULT || v->screen==SCREEN_DIAGNOSTICS || v->screen==SCREEN_LIVE)
         ui_text(810,87,20,p.muted,v->usb_label,422);
@@ -611,13 +641,14 @@ void view_render(const View *v,uint32_t *pixels,int stride) {
         return;
     } else if(v->screen==SCREEN_MACRO_STUDIO) {
         ui_text(48,88,32,p.ink,"MACRO STUDIO",1000);
-        const char *titles[]={"MANUAL BUILDER","RECORD INPUTS"};
-        const char *descriptions[]={"Create controller combinations, holds and neutral delays.","Capture local controller input, review, edit and save."};
-        for(int i=0;i<2;i++) {
-            int y=160+i*170;card_frame(48,y,1184,140,i==v->selected);
+        const char *titles[]={"MANUAL BUILDER","LOCAL RECORD","LIVE RECORD"};
+        const char *descriptions[]={"Create controller combinations, holds and neutral delays.","Record locally without USB forwarding; review, edit and save.","Enter live passthrough; Capture or touch Start/Stop to record."};
+        for(int i=0;i<3;i++) {
+            int y=160+i*155;card_frame(48,y,1184,140,i==v->selected);
             ui_text(75,y+25,32,p.ink,titles[i],1050);
             ui_text(75,y+80,20,p.muted,descriptions[i],1050);
         }
+        if(v->macro_status[0]) ui_text(48,616,20,color(0xd9aa54),v->macro_status,1184);
         return;
     } else if(v->screen==SCREEN_MACRO_DELETE) {
         ui_text(48,82,32,p.ink,"Delete macro?",1000);

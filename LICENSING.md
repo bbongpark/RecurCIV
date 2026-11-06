@@ -2,7 +2,7 @@
 
 ## Combined software
 
-RecurCIV v1.0.0 is distributed as a combined software work under **GNU GPL
+RecurCIV v1.1.0 is distributed as a combined software work under **GNU GPL
 version 3 only (`GPL-3.0-only`)**, including its embedded automatic Civilization
 VII payload. The complete terms are in `COPYING`. You may use, study, modify,
 and redistribute the software under those terms, without warranty, subject
@@ -10,7 +10,7 @@ to applicable law. This is a license statement, not a legal opinion.
 
 RecurCIV-specific contributions in `source/`, `include/`, `tests/`, `tools/`,
 `build.py`, and project documentation are offered under GPLv3. These licensing
-and release-packaging changes were prepared on 2026-11-05. The existing
+and initial v1.0.0 release-packaging changes were prepared on 2026-11-05. The then-existing
 functional C source, headers, tests, USB implementation, UI, fonts, icon,
 `build.py`, and approved `payload.txt` were not modified by this preparation.
 See `CHANGELOG.md` for RecurCIV's functional changes from Plume USB.
@@ -59,7 +59,7 @@ credits, and `licences/` directory intact. The standalone `.nro` is not a
 self-contained legal-notice package: accompany it with the matching notices
 archive, and retain those notices when redistributing it.
 
-For the proposed public GitHub release, provide `RecurCIV-v1.0.0-source.zip`
+For the v1.1.0 public GitHub release, provide `RecurCIV-v1.1.0-source.zip`
 beside the binaries, at no additional charge, with an explicit link in the
 release description. That archive must include the complete application
 source, payload and its editable sources/generator, required assets, tests,

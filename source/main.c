@@ -16,6 +16,7 @@
 #include "typer.h"
 #include "macro_storage.h"
 #include "macro_app.h"
+#include "capture_control.h"
 #include "controller_route.h"
 #include "civ_usb.h"
 #include "civ_route.h"
@@ -59,7 +60,7 @@ static GamepadButtonTest gamepad_button_test;
    writer or open a modal applet while the two-interface lease is held. */
 static bool civ_can_start(void) {
     return sender.phase==TX_NONE && caps_toggle.phase==TX_NONE && !compose_requested &&
-        !compose_input_lock && !quit_requested && !gamepad_button_test.active &&
+        !compose_input_lock && !quit_requested && !gamepad_button_test.active && !macro_app_busy(&macro_app) &&
         view.screen!=SCREEN_LIVE && view.screen!=SCREEN_CONTROLLER && view.screen!=SCREEN_DIAGNOSTICS;
 }
 
@@ -473,6 +474,7 @@ int main(int argc,char **argv) {
     mkdir_failed=!prepare_log_directory(&mkdir_error_path,&mkdir_error_number);
     memset(&view,0,sizeof(view));view.enter_pause_ms=200;load_settings();
     macro_app_init(&macro_app,MACRO_STORAGE_DIRECTORY);
+    capture_control_init(now_ms);
     padConfigureInput(1,HidNpadStyleSet_NpadStandard);padInitializeDefault(&pad);hidInitializeTouchScreen();
     Result rc=framebufferCreate(&framebuffer,nwindowGetDefault(),1280,720,PIXEL_FORMAT_RGBA_8888,2);
     if(R_SUCCEEDED(rc)) rc=framebufferMakeLinear(&framebuffer);
@@ -489,10 +491,30 @@ int main(int argc,char **argv) {
             padUpdate(&pad);HidTouchScreenState touch={0};hidGetTouchScreenStates(&touch,1);
             HidAnalogStickState left=padGetStickPos(&pad,0),right=padGetStickPos(&pad,1);
             uint32_t held=(uint32_t)padGetButtons(&pad);
-            macro_app_tick(&macro_app,&view,padIsConnected(&pad),held,left.x,left.y,right.x,right.y,touch.count,now);
-            Action action=macro_app_input(&macro_app,&view,(uint32_t)padGetButtonsDown(&pad),held,left.x,left.y,touch.count,
-                touch.count?(int)touch.touches[0].x:0,touch.count?(int)touch.touches[0].y:0,now);
-            perform(action,now);
+            /* Timestamp the physical sample, not a USB completion or a render.
+               Live Stop is consumed before this frame can be forwarded. Keep
+               the established local-recording/playback routing order otherwise. */
+            uint64_t sampled_at=now_ms();bool live_frame=macro_live_busy(&macro_app.live);
+            bool capture_session=live_frame && macro_app.live.state!=ML_CLEANUP && macro_app.live.state!=ML_BLOCKED;
+            bool capture_eligible=capture_session && !macro_app.replace_pending && !touch.count &&
+                padIsConnected(&pad) && gamepad_ready() &&
+                (macro_app.live.state==ML_READY || macro_app.live.state==ML_RECORDING);
+            capture_control_update(capture_session,capture_eligible,sampled_at);
+            if(live_frame) {
+                Action action=macro_app_input(&macro_app,&view,(uint32_t)padGetButtonsDown(&pad),held,left.x,left.y,touch.count,
+                    touch.count?(int)touch.touches[0].x:0,touch.count?(int)touch.touches[0].y:0,sampled_at);
+                perform(action,sampled_at);
+                if(action!=ACTION_NONE) capture_control_discard(sampled_at);
+                else if(capture_control_take(sampled_at)) macro_app_capture(&macro_app,&view,sampled_at);
+            }
+            macro_app_tick(&macro_app,&view,padIsConnected(&pad),held,left.x,left.y,right.x,right.y,touch.count,sampled_at);
+            if(!live_frame) {
+                Action action=macro_app_input(&macro_app,&view,(uint32_t)padGetButtonsDown(&pad),held,left.x,left.y,touch.count,
+                    touch.count?(int)touch.touches[0].x:0,touch.count?(int)touch.touches[0].y:0,sampled_at);
+                perform(action,sampled_at);
+            }
+            capture_session=macro_live_busy(&macro_app.live) && macro_app.live.state!=ML_CLEANUP && macro_app.live.state!=ML_BLOCKED;
+            if(!capture_session || !live_frame) capture_control_update(capture_session,false,sampled_at);
             if(macro_app.dialog!=MD_NONE && !macro_app_busy(&macro_app)) {
                 SwkbdConfig config;char text[MACRO_NAME_BYTES]={0};Result rc=swkbdCreate(&config,0);
                 if(R_SUCCEEDED(rc)) {
@@ -648,6 +670,9 @@ int main(int argc,char **argv) {
             repeat_at=now+350;menu_stick=(LiveNav){0};library_stick=(LiveNav){0};
             update_view();
         }
+        if(!macro_live_busy(&macro_app.live) || macro_app.live.state==ML_CLEANUP || macro_app.live.state==ML_BLOCKED)
+            capture_control_update(false,false,now_ms());
+        snprintf(view.macro_capture_status,sizeof(view.macro_capture_status),"%s",capture_control_status());
         /* Keep the USB pump running between frames. Fast transfers redraw at
            10 Hz instead of blocking every packet on a display refresh. */
         bool fast_stream=civ_usb_owned() || (sender.phase!=TX_NONE && sender.phase!=TX_COUNTDOWN && sender.phase!=TX_ABORT && pace_delay(view.pace)<=10);
@@ -659,6 +684,12 @@ int main(int argc,char **argv) {
         }
         svcSleepThread((fast_stream || macro_app_busy(&macro_app))?1000000:3000000);
     }
+    if(macro_live_busy(&macro_app.live)) {
+        macro_live_exit(&macro_app.live,now_ms());
+        keyboard_log("Live recording application exit: neutral requested; delivery unresolved until service closes");
+    }
+    capture_control_shutdown();
+    if(*capture_control_status()) keyboard_log("%s",capture_control_status());
     if(macro_app.player.owned) {
         macro_play_cancel(&macro_app.player);
         keyboard_log("Macro application exit: controller neutral requested; delivery unresolved until service closes");
