@@ -2,7 +2,7 @@
 
 **USB Controller, Keyboard, Macro Studio & Civilization VII Automation**
 
-**Current release: [v1.1.0](https://github.com/OR3OTHUG/RecurCIV/releases/tag/v1.1.0)**
+**Current release: [v1.1.0](https://codeberg.org/OR3OTHUG/RecurCIV/releases/tag/v1.1.0)**
 
 RecurCIV is a Nintendo Switch homebrew application combining USB controller input, keyboard functionality, controller macro creation and playback, and automated Civilization VII exploit delivery.
 
