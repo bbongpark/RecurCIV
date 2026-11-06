@@ -110,7 +110,7 @@ Successful exploit execution does not automatically complete any subsequent netw
 
 ## Installation
 
-1. Download `RecurCIV-v1.1.0.zip` from the [v1.1.0 release](https://github.com/OR3OTHUG/RecurCIV/releases/tag/v1.1.0).
+1. Download `RecurCIV-v1.1.0.zip` from the [v1.1.0 release](https://codeberg.org/OR3OTHUG/RecurCIV/releases/tag/v1.1.0).
 2. Extract it to the root of your Switch SD card.
 3. Confirm the application is located at:
 
